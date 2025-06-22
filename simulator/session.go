@@ -9,16 +9,19 @@ import (
 )
 
 type Session struct {
-	Index     int
-	SessionID string
-	UserID    string
-	VideoID   string
-	Logger    func(int, int64, string, string, string)
-	Emit      func(string, string, string)
+	Index               int
+	SessionID           string
+	UserID              string
+	VideoID             string
+	Logger              func(int, int64, string, string, string)
+	Emit                func(string, string, string)
+	enablePause         bool
+	enableSeek          bool
+	enableBitrateChange bool
 }
 
 func NewSession(index int) *Session {
-	return &Session{
+	s := &Session{
 		Index:     index,
 		SessionID: utils.GenerateSessionID(),
 		UserID:    utils.RandomUserID(),
@@ -28,85 +31,79 @@ func NewSession(index int) *Session {
 		},
 		Emit: utils.EmitPayload,
 	}
+
+	// Randomly assign capabilities to each session
+	s.enablePause = rand.Intn(2) == 0
+	s.enableSeek = rand.Intn(2) == 0
+	s.enableBitrateChange = rand.Intn(2) == 0
+
+	return s
 }
 
 func (s *Session) Run() {
 	s.sendInitialMetadata()
-
-	duration := rand.Intn(60) + 30
+	duration := rand.Intn(60) + 30 // Simulate 30–90 seconds video
 	playPosition := 0
-
-	s.EmitEvent("load", fmt.Sprintf("%d", time.Now().UnixMilli()))
+	tsStart := time.Now().UnixMilli()
+	s.EmitEvent("load", fmt.Sprintf("%d", tsStart))
 	time.Sleep(300 * time.Millisecond)
 
 	vb, ab := utils.RandomBitrate()
 	s.EmitEvent("bitrate", fmt.Sprintf("%d,%d", vb, ab))
 	s.EmitEvent("play", fmt.Sprintf("%d", time.Now().UnixMilli()))
-	s.EmitEvent("buffer", fmt.Sprintf("%d", time.Now().UnixMilli()))
-	time.Sleep(300 * time.Millisecond)
-	s.EmitEvent("playing", fmt.Sprintf("%d,%.2f", time.Now().UnixMilli(), float64(playPosition)))
 
-	lastWasPlaying := true
-	bufferedSinceLastPlay := true
+	buffered := false
 
 	for playPosition < duration {
 		time.Sleep(500 * time.Millisecond)
 
-		// Random event chance
-		eventRoll := rand.Intn(20)
-		switch eventRoll {
-		case 2: // pause
-			s.EmitEvent("pause", fmt.Sprintf("%d", time.Now().UnixMilli()))
-			time.Sleep(800 * time.Millisecond) // simulate wait before resume
-
-			s.EmitEvent("play", fmt.Sprintf("%d", time.Now().UnixMilli()))
+		bufferCount := rand.Intn(3) + 1 // 1–3 buffers between playing
+		for i := 0; i < bufferCount; i++ {
 			s.EmitEvent("buffer", fmt.Sprintf("%d", time.Now().UnixMilli()))
 			time.Sleep(300 * time.Millisecond)
-			s.EmitEvent("playing", fmt.Sprintf("%d,%.2f", time.Now().UnixMilli(), float64(playPosition)))
-			lastWasPlaying = true
-			bufferedSinceLastPlay = true
-			continue
-
-		case 3: // seek
-			seekTo := rand.Intn(duration)
-			s.EmitEvent("seek", fmt.Sprintf("%d,%.2f", time.Now().UnixMilli(), float64(seekTo)))
-			s.EmitEvent("buffer", fmt.Sprintf("%d", time.Now().UnixMilli()))
-			time.Sleep(300 * time.Millisecond)
-			playPosition = seekTo
-			s.EmitEvent("playing", fmt.Sprintf("%d,%.2f", time.Now().UnixMilli(), float64(playPosition)))
-			lastWasPlaying = true
-			bufferedSinceLastPlay = true
-			continue
-
-		case 5: // network issue - bitrate + buffer
-			vb, ab := utils.RandomBitrate()
-			s.EmitEvent("bitrate", fmt.Sprintf("%d,%d", vb, ab))
-			s.EmitEvent("buffer", fmt.Sprintf("%d", time.Now().UnixMilli()))
-			time.Sleep(300 * time.Millisecond)
-
-			lastWasPlaying = false
-			bufferedSinceLastPlay = true
-		}
-
-		// If last was playing, insert buffer to break repeat
-		// If last was playing, emit 1–2 buffers before next playing
-		if lastWasPlaying {
-			bufferCount := rand.Intn(2) + 1 // 1 to 2
-			for i := 0; i < bufferCount; i++ {
-				s.EmitEvent("buffer", fmt.Sprintf("%d", time.Now().UnixMilli()))
-				time.Sleep(200 * time.Millisecond)
-			}
-			bufferedSinceLastPlay = true
+			buffered = true
 		}
 
 		playPosition += 5
 		s.EmitEvent("playing", fmt.Sprintf("%d,%.2f", time.Now().UnixMilli(), float64(playPosition)))
-		lastWasPlaying = true
-		bufferedSinceLastPlay = false
+		buffered = false
+
+		// Optional events by session config
+		switch rand.Intn(20) {
+		case 2:
+			if s.enablePause {
+				s.EmitEvent("pause", fmt.Sprintf("%d", time.Now().UnixMilli()))
+				delay := time.Duration(rand.Intn(5)+1) * time.Second
+				time.Sleep(delay)
+				s.EmitEvent("play", fmt.Sprintf("%d", time.Now().UnixMilli()))
+				s.EmitEvent("buffer", fmt.Sprintf("%d", time.Now().UnixMilli()))
+				time.Sleep(300 * time.Millisecond)
+				s.EmitEvent("playing", fmt.Sprintf("%d,%.2f", time.Now().UnixMilli(), float64(playPosition)))
+			}
+		case 3:
+			if s.enableSeek {
+				seekTo := rand.Intn(duration)
+				s.EmitEvent("seek", fmt.Sprintf("%d,%.2f", time.Now().UnixMilli(), float64(seekTo)))
+				playPosition = seekTo
+				if rand.Intn(2) == 0 {
+					vb, ab := utils.RandomBitrate()
+					s.EmitEvent("bitrate", fmt.Sprintf("%d,%d", vb, ab))
+				}
+				s.EmitEvent("buffer", fmt.Sprintf("%d", time.Now().UnixMilli()))
+				time.Sleep(300 * time.Millisecond)
+				s.EmitEvent("playing", fmt.Sprintf("%d,%.2f", time.Now().UnixMilli(), float64(playPosition)))
+			}
+		case 5:
+			if s.enableBitrateChange {
+				vb, ab := utils.RandomBitrate()
+				s.EmitEvent("bitrate", fmt.Sprintf("%d,%d", vb, ab))
+				s.EmitEvent("buffer", fmt.Sprintf("%d", time.Now().UnixMilli()))
+				buffered = true
+			}
+		}
 	}
 
-	// Ensure buffer before complete
-	if !bufferedSinceLastPlay {
+	if !buffered {
 		s.EmitEvent("buffer", fmt.Sprintf("%d", time.Now().UnixMilli()))
 	}
 	s.EmitEvent("complete", fmt.Sprintf("%d", time.Now().UnixMilli()))
