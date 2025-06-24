@@ -1,35 +1,28 @@
 package main
 
 import (
-	"os"
-	"strconv"
 	"sync"
+	"time"
 
 	"video-playback-simulator/simulator"
-	// "video-playback-simulator/utils"
+)
+
+const (
+	numSessions = 1 // You can increase this for load simulation
 )
 
 func main() {
-	// Load environment configuration
-	concurrentStr := os.Getenv("CONCURRENT")
-	if concurrentStr == "" {
-		concurrentStr = "1"
-	}
-	concurrent, err := strconv.Atoi(concurrentStr)
-	if err != nil || concurrent < 1 {
-		concurrent = 1
-	}
-
 	var wg sync.WaitGroup
-	wg.Add(concurrent)
+	wg.Add(numSessions)
 
-	// Run multiple sessions concurrently
-	for i := 0; i < concurrent; i++ {
+	for i := 0; i < numSessions; i++ {
 		go func(index int) {
-			sess := simulator.NewSession(index)
-			sess.Run()
-			wg.Done()
+			defer wg.Done()
+			session := simulator.NewSession(index)
+			session.Run()
 		}(i)
+		// Optional staggered start for realism
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	wg.Wait()
