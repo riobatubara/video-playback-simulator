@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"sync"
@@ -18,9 +19,10 @@ type EventPayload struct {
 }
 
 var (
-	apiURL  string
-	apiKey  string
-	onceSet sync.Once
+	apiURL     string
+	apiKey     string
+	onceSet    sync.Once
+	httpClient *http.Client
 )
 
 // SetAPIConfig allows main.go to set both api_url and api_key
@@ -28,11 +30,24 @@ func SetAPIConfig(url, key string) {
 	onceSet.Do(func() {
 		apiURL = url
 		apiKey = key
+		// FIX: Use a dedicated client with a defined timeout to avoid hanging forever
+		httpClient = &http.Client{
+			Timeout: 10 * time.Second,
+		}
 	})
 }
 
 // EmitPayload sends to API if configured; otherwise, does nothing
 func EmitPayload(event, sessid, value string) {
+	// IMPROVEMENT: Fast-fail immediately before allocating memory or running json.Marshal
+	if apiURL == "" {
+		return // No API, just simulate
+	}
+	if apiKey == "" {
+		fmt.Fprintf(os.Stderr, "Cannot send to API: missing X-API-Key\n")
+		return
+	}
+
 	payload := EventPayload{
 		TsClient: time.Now().UnixMilli(),
 		SessID:   sessid,
@@ -40,17 +55,10 @@ func EmitPayload(event, sessid, value string) {
 		Value:    value,
 	}
 
+	// Marshaling directly as a single item payload array
 	data, err := json.Marshal([]EventPayload{payload})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to marshal payload: %v\n", err)
-		return
-	}
-
-	if apiURL == "" {
-		return // No API, just simulate
-	}
-	if apiKey == "" {
-		fmt.Fprintf(os.Stderr, "Cannot send to API: missing X-API-Key\n")
 		return
 	}
 
@@ -62,12 +70,18 @@ func EmitPayload(event, sessid, value string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	// FIX: Use the customized client instead of DefaultClient
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to send payload: %v\n", err)
 		return
 	}
-	defer resp.Body.Close()
+
+	// FIX: Clean up response fully to prevent socket leaks and allow connection reuse
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		fmt.Fprintf(os.Stderr, "API responded with non-success status: %s\n", resp.Status)
