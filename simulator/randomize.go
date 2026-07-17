@@ -11,52 +11,71 @@ type Init struct {
 	Mtx *sync.Mutex
 }
 
-// Global shared instance
+// Global pool of non-blocking *rand.Rand generators
+var randPool = sync.Pool{
+	New: func() interface{} {
+		// Seeds a unique, isolated generator per thread to completely avoid mutexes
+		return rand.New(rand.NewSource(time.Now().UnixNano()))
+	},
+}
+
+// Global shared instance remains matching your exact original declaration
 var Randomize = &Init{
 	Rnd: rand.New(rand.NewSource(time.Now().UnixNano())),
 	Mtx: &sync.Mutex{},
 }
 
-var runes = []rune("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+// OPTIMIZATION: Converted from rune to byte array to drop memory usage by 75%
+var letters = []byte("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-// Thread-safe random integer
+// Thread-safe random integer without global mutex bottlenecks
 func (r *Init) Intn(n int) int {
-	r.Mtx.Lock()
-	defer r.Mtx.Unlock()
-	return r.Rnd.Intn(n)
+	localRand := randPool.Get().(*rand.Rand)
+	val := localRand.Intn(n)
+	randPool.Put(localRand) // Return generator back to the pool instantly
+	return val
 }
 
 // Thread-safe random float64 (0.0 to <1.0)
 func (r *Init) Float64() float64 {
-	r.Mtx.Lock()
-	defer r.Mtx.Unlock()
-	return r.Rnd.Float64()
+	localRand := randPool.Get().(*rand.Rand)
+	val := localRand.Float64()
+	randPool.Put(localRand)
+	return val
 }
 
 // Thread-safe shuffle
 func (r *Init) Shuffle(n int, swap func(i, j int)) {
-	r.Mtx.Lock()
-	defer r.Mtx.Unlock()
-	r.Rnd.Shuffle(n, swap)
+	localRand := randPool.Get().(*rand.Rand)
+	localRand.Shuffle(n, swap)
+	randPool.Put(localRand)
 }
 
+// GenerateSessionID prints out exact same format but avoids the 32x loop lock
 func GenerateSessionID() string {
 	const length = 32
-	id := make([]rune, length)
+	id := make([]byte, length)
 
-	for i := range id {
-		id[i] = runes[Randomize.Intn(len(runes))]
+	// OPTIMIZATION: Acquire the local randomizer ONCE instead of 32 separate times
+	localRand := randPool.Get().(*rand.Rand)
+
+	for i := 0; i < length; i++ {
+		id[i] = letters[localRand.Intn(len(letters))]
 	}
 
+	randPool.Put(localRand) // Release back to pool
+
+	// Converts the fast byte array directly to a final output string
 	return string(id)
 }
 
 func RandomBitrate() (int, int) {
-	videoBitrates := []int{1500, 2400, 3600, 4500, 6000} // example video bitrates in kbps
-	audioBitrates := []int{96, 128, 160, 192, 256}       // example audio bitrates in kbps
+	videoBitrates := []int{1500, 2400, 3600, 4500, 6000}
+	audioBitrates := []int{96, 128, 160, 192, 256}
 
-	v := videoBitrates[Randomize.Intn(len(videoBitrates))]
-	a := audioBitrates[Randomize.Intn(len(audioBitrates))]
+	// Uses the lock-free Intn pool under the hood
+	v := videoBitrates[Randomize.Intn(len(videoBitrates))] // example video bitrates in kbps
+	a := audioBitrates[Randomize.Intn(len(audioBitrates))] // example audio bitrates in kbps
 
 	return v, a
 }
