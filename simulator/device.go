@@ -6,37 +6,48 @@ import (
 	"github.com/google/uuid"
 )
 
-var (
-	platforms = []string{
-		// Desktop Platforms (Modernized with exact frozen format tokens)
-		"Windows NT 10.0; Win64; x64",
-		"Macintosh; Intel Mac OS X 10_15_7",
-		"X11; Linux x86_64",
-		"X11; CrOS x86_64 14541.0.0", // ChromeOS
+type uaGroup struct {
+	platforms []string
+	browsers  []string
+}
 
-		// Mobile Platforms (Updated to modern OS standards)
-		"iPhone; CPU iPhone OS 18_2 like Mac OS X",
-		"iPad; CPU OS 18_2 like Mac OS X",
-		"Linux; Android 14; K", // Android 13+ standardizes on "K" token for privacy reduction
-		"Linux; Android 15; K",
+var (
+	// Categorize the data into logical device ecosystems
+	desktopUA = uaGroup{
+		platforms: []string{
+			"Windows NT 10.0; Win64; x64",
+			"Macintosh; Intel Mac OS X 10_15_7",
+			"X11; Linux x86_64",
+			"X11; CrOS x86_64 14541.0.0",
+		},
+		browsers: []string{
+			// Google Chrome & Chromium-based (Updated to recent major version builds)
+			"Chrome/146.0.0.0",
+			"Chrome/145.0.6422.112",
+
+			// Mozilla Firefox (Updated to recent rapid-release branches)
+			"Firefox/135.0",
+			"Firefox/136.0",
+
+			// Microsoft Edge & Opera
+			"Edge/146.0.2567.48",
+			"OPR/112.0.0.0",
+		},
 	}
 
-	browsers = []string{
-		// Google Chrome & Chromium-based (Updated to recent major version builds)
-		"Chrome/146.0.0.0",
-		"Chrome/145.0.6422.112",
-
-		// Apple Safari (Updated to match iOS 18 ecosystem)
-		"Version/18.2 Safari/605.1.15",
-		"Version/18.0 Safari/604.1",
-
-		// Mozilla Firefox (Updated to recent rapid-release branches)
-		"Firefox/135.0",
-		"Firefox/136.0",
-
-		// Microsoft Edge & Opera
-		"Edge/146.0.2567.48",
-		"OPR/112.0.0.0", // Opera uses OPR token
+	mobileUA = uaGroup{
+		platforms: []string{
+			"iPhone; CPU iPhone OS 18_2 like Mac OS X",
+			"iPad; CPU OS 18_2 like Mac OS X",
+			"Linux; Android 14; K",
+			"Linux; Android 15; K",
+		},
+		browsers: []string{
+			"Version/18.2 Mobile/15E148 Safari/605.1.15",
+			"Version/18.0 Mobile/15E148 Safari/604.1",
+			"Chrome/146.0.0.0 Mobile Safari/537.36",
+			"Firefox/135.0 Mobile",
+		},
 	}
 )
 
@@ -51,8 +62,17 @@ func RandomIP() string {
 
 // RandomUA returns a fake User-Agent string.
 func RandomUA() string {
-	platform := platforms[Randomize.Intn(len(platforms))]
-	browser := browsers[Randomize.Intn(len(browsers))]
+	var group uaGroup
+
+	// 50/50 chance to pick a Desktop or Mobile ecosystem profile
+	if Randomize.Intn(2) == 0 {
+		group = desktopUA
+	} else {
+		group = mobileUA
+	}
+
+	platform := group.platforms[Randomize.Intn(len(group.platforms))]
+	browser := group.browsers[Randomize.Intn(len(group.browsers))]
 
 	// IMPROVEMENT: Concatenation lets the Go compiler calculate memory size allocations instantly
 	return "Mozilla/5.0 (" + platform + ") AppleWebKit/537.36 (KHTML, like Gecko) " + browser + " Safari/537.36"
