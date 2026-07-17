@@ -36,35 +36,35 @@ Each playback session emits events in response to user or system actions.
 - **Example:** `120`
 - **Triggered by:** SDK/system on video load
 - **Notes:** Sets total video duration for session
-- **Required:** ✅ Yes
+- **Required:** Yes
 
 ### `bitrate`
 - **Value:** `video_bitrate, audio_bitrate` in Kbps
 - **Example:** `3600,256`
 - **Triggered by:** load, playing, seek - network change
 - **Notes:** Can be emitted multiple times
-- **Required:** ✅ Yes
+- **Required:** Yes
 
 ### `load`
 - **Value:** `int` (UNIX timestamp)
 - **Example:** `1750482971043`
 - **Triggered by:** Video player initialization
 - **Notes:** First lifecycle event
-- **Required:** ✅ Yes
+- **Required:** Yes
 
 ### `play`
 - **Value:** `int` (UNIX timestamp)
 - **Example:** `1750482971043`
 - **Triggered by:** User clicks play
 - **Notes:** May occur again after pause
-- **Required:** ✅ Yes
+- **Required:** Yes
 
 ### `playing`
 - **Value:** `timestamp, position_in_seconds`
 - **Example:** `1750482976066, 5.00`
 - **Triggered by:** Continuous playback, every 5 seconds
 - **Notes:** Resets after pause/seek
-- **Required:** ✅ Yes
+- **Required:** Yes
 
 ### `buffer`
 - **Value:** `int` (UNIX timestamp)
@@ -74,14 +74,14 @@ Each playback session emits events in response to user or system actions.
   Never emit repeated playing events without at least one buffer between.
   Between two playing events, buffer can appear 1–3 times randomly.
   No two buffer events can appear back-to-back without a playing after them.
-- **Required:** ⚠️ Conditional
+- **Required:** Conditional
 
 ### `pause`
 - **Value:** `int` (UNIX timestamp)
 - **Example:** `1750482986082`
 - **Triggered by:** User pauses playback
 - **Notes:** Followed by new play event to resume
-- **Required:** ⚠️ Conditional
+- **Required:** Conditional
 
 ### `seek`
 - **Value:** `timestamp, target_seconds`
@@ -90,13 +90,13 @@ Each playback session emits events in response to user or system actions.
 - **Notes:**
    Breaks playing stream
    May trigger a new bitrate (simulate quality adjustment)
-- **Required:** ⚠️ Conditional
+- **Required:** Conditional
 
 ### `complete`
 - **Value:** `int` (UNIX timestamp)
 - **Example:** `1750483106325`
 - **Triggered by:** Video reaches end
-- **Required:** ⚠️ Conditional
+- **Required:** Conditional
 
 
 ### `unload`
@@ -104,13 +104,13 @@ Each playback session emits events in response to user or system actions.
 - **Example:** `1750483106325`
 - **Triggered by:** Player is closed, browser tab exit
 - **Notes:** May occur before complete
-- **Required:** ✅ Yes
+- **Required:** Yes
 
 ### `error`
 - **Value:** `string`
 - **Example:** `"video error"`
 - **Triggered by:** Playback failure
-- **Required:** ⚠️ Optional
+- **Required:** Optional
 
 ---
 
