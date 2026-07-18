@@ -139,6 +139,7 @@ func (s *Session) sendInitialMetadata() {
 		{"video_id", s.Video.ID},
 		{"video_name", s.Video.Name},
 		{"tags", TagsByID(s.Video.ID)},
+		{"duration", strconv.Itoa(DurationByID(s.Video.ID))},
 	}
 
 	for _, item := range meta {
